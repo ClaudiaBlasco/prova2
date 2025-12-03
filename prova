@@ -95,22 +95,26 @@ def run():
 
     router = net['r0']
 
-    # --------- FIREWALL (iptables) ----------
-    # IMPORTANT: primer permetre connexions RELATED,ESTABLISHED
-    # (aquesta regla és CRÍTICA per deixar passar les respostes)
-    router.cmd("iptables -F")  # neteja prèvia (opcional)
-    router.cmd("iptables -P FORWARD DROP")  # politique per defecte: DROP (més segur)
+    # -------- FIREWALL ---------
+    
+    # 0) Netejar primer
+    router.cmd("iptables -F")
+    router.cmd("iptables -P FORWARD DROP")   # Política per defecte: DROP
+    
+    # 1) ARP sempre permès (ha d’anar abans que qualsevol altra)
+    router.cmd("iptables -A FORWARD -p arp -j ACCEPT")
+    
+    # 2) Permetre paquets de retorn
     router.cmd("iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT")
-
-    # 1) IT (192.168.1.0/24) → Accés complet a servidors
+    
+    # 3) IT → Servidors (tot permès)
     router.cmd("iptables -A FORWARD -s 192.168.1.0/24 -d 192.168.100.0/24 -j ACCEPT")
-
-    # 2) HR (10.0.0.0/8) → Només accés al webserver (192.168.100.10)
+    
+    # 4) HR → Webserver només (ACCEPT primer, després DROP)
     router.cmd("iptables -A FORWARD -s 10.0.0.0/8 -d 192.168.100.10 -j ACCEPT")
-    # bloquejar la resta de la xarxa de servidors per HR
     router.cmd("iptables -A FORWARD -s 10.0.0.0/8 -d 192.168.100.0/24 -j DROP")
-
-    # 3) Marketing (172.16.0.0/12) → Sense accés als servidors
+    
+    # 5) Marketing → cap accés
     router.cmd("iptables -A FORWARD -s 172.16.0.0/12 -d 192.168.100.0/24 -j DROP")
 
     # Activa el webserver minimal
