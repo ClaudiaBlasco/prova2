@@ -1,4 +1,3 @@
-nomes corregeix aquest codi si falta alguna doble _
 #!/usr/bin/env python3
 from mininet.topo import Topo
 from mininet.net import Mininet
