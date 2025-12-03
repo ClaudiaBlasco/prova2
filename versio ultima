@@ -1,0 +1,109 @@
+#!/usr/bin/env python
+
+from mininet.topo import Topo
+from mininet.net import Mininet
+from mininet.node import Node
+from mininet.log import setLogLevel, info
+from mininet.cli import CLI
+
+
+class LinuxRouter(Node):
+    def config(self, **params):
+        super(LinuxRouter, self).config(**params)
+        self.cmd('sysctl net.ipv4.ip_forward=1')
+
+    def terminate(self):
+        self.cmd('sysctl net.ipv4.ip_forward=0')
+        super(LinuxRouter, self).terminate()
+
+
+class NetworkTopo(Topo):
+
+    def build(self):
+
+        defaultIP = '192.168.1.1/24'
+        router = self.addNode('r0', cls=LinuxRouter, ip=defaultIP)
+
+        s1, s2, s3 = [self.addSwitch(s) for s in ('s1', 's2', 's3')]
+
+        self.addLink(s1, router, intfName2='r0-eth1',
+                     params2={'ip': defaultIP})
+
+        self.addLink(s2, router, intfName2='r0-eth2',
+                     params2={'ip': '172.16.0.1/12'})
+
+        self.addLink(s3, router, intfName2='r0-eth3',
+                     params2={'ip': '10.0.0.1/8'})
+
+        h1 = self.addHost('h1', ip='192.168.1.100/24',
+                           defaultRoute='via 192.168.1.1')
+        h2 = self.addHost('h2', ip='172.16.0.100/12',
+                           defaultRoute='via 172.16.0.1')
+        h3 = self.addHost('h3', ip='10.0.0.100/8',
+                           defaultRoute='via 10.0.0.1')
+
+        for h, s in [(h1, s1), (h2, s2), (h3, s3)]:
+            self.addLink(h, s)
+
+        # ===============================================================
+        # >>> AFEGIT: Xarxa servidors
+        # ===============================================================
+        s4 = self.addSwitch('s4')
+
+        self.addLink(s4, router, intfName2='r0-eth4',
+                     params2={'ip': '192.168.100.1/24'})
+
+        web = self.addHost('webserver', ip='192.168.100.10/24',
+                           defaultRoute='via 192.168.100.1')
+        db = self.addHost('dbserver', ip='192.168.100.20/24',
+                          defaultRoute='via 192.168.100.1')
+        fs = self.addHost('fileserver', ip='192.168.100.30/24',
+                          defaultRoute='via 192.168.100.1')
+
+        self.addLink(web, s4)
+        self.addLink(db, s4)
+        self.addLink(fs, s4)
+        # ===============================================================
+
+
+def run():
+    topo = NetworkTopo()
+    net = Mininet(topo=topo, waitConnected=True)
+    net.start()
+
+    router = net['r0']
+
+    # ===============================================================
+    # >>> AFEGIT: FIREWALL IPTABLES
+    # ===============================================================
+    router.cmd("iptables -F")
+    router.cmd("iptables -P FORWARD DROP")
+
+    # Permetre retorn
+    router.cmd("iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT")
+
+    # a) IT → accés complet
+    router.cmd("iptables -A FORWARD -s 192.168.1.0/24 -d 192.168.100.0/24 -j ACCEPT")
+
+    # b) HR → només webserver
+    router.cmd("iptables -A FORWARD -s 10.0.0.0/8 -d 192.168.100.10 -j ACCEPT")
+    router.cmd("iptables -A FORWARD -s 10.0.0.0/8 -d 192.168.100.0/24 -j DROP")
+
+    # c) Marketing → cap accés
+    router.cmd("iptables -A FORWARD -s 172.16.0.0/12 -d 192.168.100.0/24 -j DROP")
+    # ===============================================================
+
+    # ===============================================================
+    # >>> AFEGIT: SERVIDOR WEB
+    # ===============================================================
+    net['webserver'].cmd('echo "<h1>Servidor Web Corporatiu</h1>" > /tmp/index.html')
+    net['webserver'].cmd('python3 -m http.server 80 --directory /tmp/ > /dev/null 2>&1 &')
+    # ===============================================================
+
+    CLI(net)
+    net.stop()
+
+
+if __name__ == '__main__':
+    setLogLevel('info')
+    run()
