@@ -13,7 +13,7 @@ if __name__ == "__main__":
 
     # ----- 1. Paths -----
     ROOT = os.path.dirname(__file__)
-    DATA_PATH = os.path.join(ROOT, "ratings_Electronics (1).csv")
+    DATA_PATH = os.path.join(ROOT, "ratings_Electronics(1).csv")
     MODELS_DIR = os.path.join(ROOT, "models")
     os.makedirs(MODELS_DIR, exist_ok=True)
     KNN_MODEL_PATH = os.path.join(MODELS_DIR, "knn_item_model.pkl")
